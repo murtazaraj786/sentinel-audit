@@ -99,27 +99,52 @@ class AnalyticRuleAuditor:
             logger.error(f"Error getting rule details for {rule_id}: {str(e)}")
             raise
     
-    def check_rule_updates(self, rule_id: str) -> Dict[str, Any]:
+    def check_rule_updates(self, rule_id: str, template: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Check if updates are available for a specific analytic rule.
         
         Args:
             rule_id: The ID of the analytic rule.
+            template: Optional template to compare against.
             
         Returns:
             Dictionary containing update information.
         """
-        # Note: This is a placeholder. The actual implementation would need to
-        # compare against the Sentinel content hub or solution templates.
         logger.info(f"Checking updates for rule: {rule_id}")
         
-        return {
-            'rule_id': rule_id,
-            'update_available': False,
-            'current_version': 'Unknown',
-            'latest_version': 'Unknown',
-            'changes': [],
-            'message': 'Update check functionality to be implemented with Content Hub API'
-        }
+        try:
+            # Get current rule details
+            current_rule = self.get_rule_details(rule_id)
+            
+            if not template:
+                return {
+                    'rule_id': rule_id,
+                    'update_available': False,
+                    'current_version': 'Unknown',
+                    'latest_version': 'Unknown',
+                    'changes': [],
+                    'message': 'No template provided for comparison'
+                }
+            
+            # Import here to avoid circular dependency
+            from utils import ResourceComparator
+            
+            # Compare properties
+            differences = ResourceComparator.compare_rule_properties(current_rule, template)
+            
+            return {
+                'rule_id': rule_id,
+                'update_available': differences['has_changes'],
+                'changes': differences['changes'],
+                'message': f"Found {len(differences['changes'])} property differences" if differences['has_changes'] else "No updates available"
+            }
+            
+        except Exception as e:
+            logger.error(f"Error checking rule updates: {str(e)}")
+            return {
+                'rule_id': rule_id,
+                'update_available': False,
+                'message': f'Error checking updates: {str(e)}'
+            }
     
     def get_rules_by_solution(self, solution_name: str) -> List[Dict[str, Any]]:
         """Get all analytic rules associated with a specific solution.

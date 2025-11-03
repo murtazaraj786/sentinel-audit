@@ -1,16 +1,22 @@
 # Microsoft Sentinel Audit and Update Tool
 
-A Python tool for auditing Microsoft Sentinel data connectors and analytic rules, checking for available updates, and deploying those updates.
+A Python tool for auditing Microsoft Sentinel data connectors and analytic rules, checking for available updates, and deploying those updates with an automated workflow.
 
 ## Features
 
 - **Data Connector Auditing**: List all data connectors in your Sentinel workspace and check for available updates
-- **Analytic Rules Auditing**: 
+- **Analytic Rules Auditing**:
   - List all installed analytic rules
   - View rule details including severity, status, and tactics
-  - Check for available updates
+  - Check for available updates from templates
   - Statistics by severity and enabled/disabled status
-- **Deployment Capabilities**: Deploy updates to analytic rules and data connectors
+- **Automated Update Detection**: Scan for updates to solutions, rules, and connectors
+- **Change Preview**: View detailed comparisons between current and updated versions
+- **Approval-Based Deployment**: 
+  - Interactive mode to review and approve each update individually
+  - Batch mode to deploy all updates at once
+  - Auto-approve mode for automated workflows
+- **Deployment Reports**: Generate detailed reports of deployment activities
 - **Detailed Reporting**: Formatted console output and logging for audit trails
 
 ## Prerequisites
@@ -62,11 +68,39 @@ AZURE_CLIENT_SECRET=your-client-secret
 
 ## Usage
 
-### Basic Audit
-Run the main audit tool to see all data connectors and analytic rules:
+### 1. Basic Audit (View Only)
+
+Run a basic audit to view all data connectors and analytic rules without deploying updates:
+
 ```powershell
 python main.py
 ```
+
+### 2. Update Detection and Deployment Workflow
+
+Run the automated workflow to detect updates and deploy them interactively:
+
+```powershell
+python main.py --workflow
+```
+
+This will:
+1. Scan for available updates to solutions, rules, and connectors
+2. Display all detected updates with details
+3. Offer deployment options:
+   - Deploy all updates at once
+   - Review and deploy individual updates
+   - Skip deployment (audit only)
+
+### 3. Auto-Deploy All Updates
+
+Automatically deploy all detected updates without prompting:
+
+```powershell
+python main.py --workflow --auto
+```
+
+**⚠️ Warning**: Use auto-deploy with caution in production environments!
 
 ### Python Module Usage
 
@@ -100,12 +134,15 @@ result = deployer.enable_analytic_rule('rule-name')
 
 ```
 sentinel-auditandupdate/
-├── main.py                 # Main entry point
+├── main.py                 # Main entry point with workflow support
 ├── config.py               # Configuration management
 ├── auth.py                 # Azure authentication
 ├── data_connectors.py      # Data connector auditing
 ├── analytic_rules.py       # Analytic rule auditing
 ├── deployment.py           # Deployment functionality
+├── content_hub.py          # Content Hub and solution management
+├── workflow.py             # Automated update detection and deployment workflow
+├── utils.py                # Comparison and analysis utilities
 ├── requirements.txt        # Python dependencies
 ├── .env.example           # Environment variable template
 ├── .gitignore             # Git ignore rules
@@ -119,37 +156,93 @@ The tool provides:
 - **Log File**: Detailed logs saved to `sentinel_audit.log`
 - **Statistics**: Counts and breakdowns by status, severity, and type
 
-### Example Output
+### Example Output - Update Workflow
 
 ```
 ================================================================================
-  DATA CONNECTORS AUDIT
+  UPDATE DETECTION AND DEPLOYMENT WORKFLOW
 ================================================================================
 
-╒══════════════════════════╤════════╤═══════════════╕
-│ Name                     │ Kind   │ Type          │
-╞══════════════════════════╪════════╪═══════════════╡
-│ AzureActiveDirectory     │ ...    │ DataConnector │
-│ MicrosoftDefenderATP     │ ...    │ DataConnector │
-╘══════════════════════════╧════════╧═══════════════╛
-
-Total data connectors: 2
+🔍 Scanning for available updates...
 
 ================================================================================
-  ANALYTIC RULES AUDIT
+  DETECTED UPDATES
 ================================================================================
 
-╒═══════════════════════════════╤═══════════╤══════════╤══════════╤═══════════╕
-│ Display Name                  │ Kind      │ Severity │ Status   │ Tactics   │
-╞═══════════════════════════════╪═══════════╪══════════╪══════════╪═══════════╡
-│ Suspicious Login Activity     │ Scheduled │ High     │ Enabled  │ Initial.. │
-│ Malware Detection             │ Scheduled │ Medium   │ Enabled  │ Execution │
-╘═══════════════════════════════╧═══════════╧══════════╧══════════╧═══════════╛
+📦 SOLUTION UPDATES AVAILABLE:
+--------------------------------------------------------------------------------
+╒═══════════════════════════╤═════════════════╤═══════════════════╤════════════╕
+│ Solution Name             │ Current Version │ Available Version │ Publisher  │
+╞═══════════════════════════╪═════════════════╪═══════════════════╪════════════╡
+│ Azure Active Directory    │ 2.0.1           │ 2.0.5             │ Microsoft  │
+│ Microsoft Defender XDR    │ 1.5.0           │ 1.6.2             │ Microsoft  │
+╘═══════════════════════════╧═════════════════╧═══════════════════╧════════════╛
 
-Total analytic rules: 2
-  - Enabled: 2
-  - Disabled: 0
+Total solution updates: 2
+
+📋 ANALYTIC RULE UPDATES AVAILABLE:
+--------------------------------------------------------------------------------
+╒═════════════════════════════════╤══════════════════╤══════════════════╤═══════════════╕
+│ Rule Name                       │ Current Severity │ Template Severity│ Update Type   │
+╞═════════════════════════════════╪══════════════════╪══════════════════╪═══════════════╡
+│ Suspicious Sign-in Activity     │ Medium           │ High             │ Template Avai │
+│ Malware Detection Alert         │ High             │ High             │ Template Avai │
+╘═════════════════════════════════╧══════════════════╧══════════════════╧═══════════════╛
+
+Total rule updates: 2
+
+================================================================================
+  DEPLOYMENT OPTIONS
+================================================================================
+1. Deploy all updates
+2. Review and deploy individual updates
+3. Skip deployment (audit only)
 ```
+
+## Workflow Features
+
+### Update Detection
+The tool automatically detects:
+- **Solution Updates**: Compares installed solution versions with available versions in Content Hub
+- **Rule Updates**: Matches installed rules with templates to identify updates
+- **Property Changes**: Analyzes what has changed (severity, query, tactics, etc.)
+
+### Change Preview
+Before deploying, view:
+- Version differences
+- Changed properties
+- Risk assessment (Low/Medium/High)
+- Query differences for analytic rules
+- Impact analysis for severity changes
+
+### Deployment Modes
+
+#### Interactive Mode
+Review each update individually and approve/reject:
+```powershell
+python main.py --workflow
+# Choose option 2 when prompted
+```
+
+#### Batch Mode
+Deploy all updates at once with a single approval:
+```powershell
+python main.py --workflow
+# Choose option 1 when prompted
+```
+
+#### Auto-Deploy Mode
+Automatically deploy all updates without prompting (for automation):
+```powershell
+python main.py --workflow --auto
+```
+
+### Deployment Reports
+After deployment, the tool generates:
+- Console summary of results
+- Detailed text report saved to file (`deployment_report_YYYYMMDD_HHMMSS.txt`)
+- Success/failure statistics
+- Individual deployment outcomes
 
 ## Security Best Practices
 

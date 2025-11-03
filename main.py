@@ -2,6 +2,7 @@
 
 import logging
 import sys
+import argparse
 from typing import Optional
 from tabulate import tabulate
 from config import SentinelConfig
@@ -9,6 +10,8 @@ from auth import get_azure_credential
 from data_connectors import DataConnectorAuditor
 from analytic_rules import AnalyticRuleAuditor
 from deployment import SentinelDeployment
+from content_hub import ContentHubManager
+from workflow import UpdateWorkflow
 
 # Configure logging
 logging.basicConfig(
@@ -141,8 +144,138 @@ def audit_analytic_rules(auditor: AnalyticRuleAuditor) -> None:
         print(f"Error: {str(e)}")
 
 
+def run_update_workflow(config: SentinelConfig, credential, auto_approve: bool = False) -> None:
+    """Run the automated update detection and deployment workflow.
+    
+    Args:
+        config: Sentinel configuration.
+        credential: Azure credential.
+        auto_approve: If True, deploy all updates without prompting.
+    """
+    print_section_header("UPDATE DETECTION AND DEPLOYMENT WORKFLOW")
+    
+    # Initialize workflow
+    workflow = UpdateWorkflow(credential, config)
+    
+    # Detect updates
+    print("🔍 Scanning for available updates...")
+    updates = workflow.detect_all_updates()
+    
+    # Display detected updates
+    workflow.display_detected_updates()
+    
+    total_updates = (
+        len(updates['solutions']) +
+        len(updates['rules']) +
+        len(updates['connectors'])
+    )
+    
+    if total_updates == 0:
+        print("✓ Your Sentinel workspace is up to date!")
+        return
+    
+    # Ask user if they want to deploy
+    print_section_header("DEPLOYMENT OPTIONS")
+    print("1. Deploy all updates")
+    print("2. Review and deploy individual updates")
+    print("3. Skip deployment (audit only)")
+    
+    if auto_approve:
+        choice = "1"
+        print("\nAuto-approve enabled - deploying all updates...")
+    else:
+        choice = input("\nEnter your choice (1-3): ").strip()
+    
+    if choice == "1":
+        # Deploy all updates
+        print_section_header("DEPLOYING ALL UPDATES")
+        results = workflow.deploy_all_updates(auto_approve=auto_approve)
+        
+        # Generate and display report
+        report = workflow.generate_deployment_report(results)
+        print(report)
+        
+    elif choice == "2":
+        # Interactive deployment
+        print_section_header("INTERACTIVE DEPLOYMENT")
+        
+        # Deploy solutions
+        for i, update in enumerate(updates['solutions']):
+            print(f"\n--- Solution Update {i+1}/{len(updates['solutions'])} ---")
+            workflow.show_update_details('solutions', i)
+            
+            response = input("\nDeploy this update? (yes/no): ").strip().lower()
+            if response in ['yes', 'y']:
+                result = workflow.approve_and_deploy_update('solutions', i)
+                print(f"Result: {result.get('message')}")
+        
+        # Deploy rules
+        for i, update in enumerate(updates['rules']):
+            print(f"\n--- Rule Update {i+1}/{len(updates['rules'])} ---")
+            workflow.show_update_details('rules', i)
+            
+            response = input("\nDeploy this update? (yes/no): ").strip().lower()
+            if response in ['yes', 'y']:
+                result = workflow.approve_and_deploy_update('rules', i)
+                print(f"Result: {result.get('message')}")
+        
+        print("\n✓ Interactive deployment complete")
+        
+    else:
+        print("\n✓ Audit complete - skipping deployment")
+        print("You can run the tool again to deploy updates when ready.")
+
+
+def run_audit_only(config: SentinelConfig, credential) -> None:
+    """Run audit-only mode (original functionality).
+    
+    Args:
+        config: Sentinel configuration.
+        credential: Azure credential.
+    """
+    print_section_header("MICROSOFT SENTINEL AUDIT")
+    
+    # Initialize auditors
+    data_connector_auditor = DataConnectorAuditor(credential, config)
+    analytic_rule_auditor = AnalyticRuleAuditor(credential, config)
+    
+    # Run audits
+    audit_data_connectors(data_connector_auditor)
+    audit_analytic_rules(analytic_rule_auditor)
+    
+    print_section_header("AUDIT COMPLETE")
+    print("Run with --workflow flag to detect and deploy updates.")
+    print("Check the logs for detailed information: sentinel_audit.log")
+
+
 def main() -> None:
-    """Main function to run the Sentinel audit."""
+    """Main function to run the Sentinel audit and update tool."""
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(
+        description='Microsoft Sentinel Audit and Update Tool',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python main.py                     # Run audit only
+  python main.py --workflow          # Detect updates with interactive deployment
+  python main.py --workflow --auto   # Auto-deploy all updates
+        """
+    )
+    
+    parser.add_argument(
+        '--workflow',
+        action='store_true',
+        help='Run update detection and deployment workflow'
+    )
+    
+    parser.add_argument(
+        '--auto',
+        action='store_true',
+        help='Auto-approve all updates (requires --workflow)'
+    )
+    
+    args = parser.parse_args()
+    
     print_section_header("MICROSOFT SENTINEL AUDIT AND UPDATE TOOL")
     
     try:
@@ -163,18 +296,11 @@ def main() -> None:
         logger.info("Authenticating with Azure...")
         credential = get_azure_credential(config)
         
-        # Initialize auditors
-        data_connector_auditor = DataConnectorAuditor(credential, config)
-        analytic_rule_auditor = AnalyticRuleAuditor(credential, config)
-        deployment_handler = SentinelDeployment(credential, config)
-        
-        # Run audits
-        audit_data_connectors(data_connector_auditor)
-        audit_analytic_rules(analytic_rule_auditor)
-        
-        print_section_header("AUDIT COMPLETE")
-        print("For deployment functionality, use the deployment module.")
-        print("Check the logs for detailed information: sentinel_audit.log")
+        # Run appropriate mode
+        if args.workflow:
+            run_update_workflow(config, credential, auto_approve=args.auto)
+        else:
+            run_audit_only(config, credential)
         
     except ValueError as e:
         logger.error(f"Configuration error: {str(e)}")
