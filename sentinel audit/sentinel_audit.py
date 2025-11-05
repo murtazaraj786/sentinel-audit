@@ -28,8 +28,9 @@ def get_azure_credential():
     """Get Azure credentials with interactive options."""
     
     # Check for authentication mode preference
-    auth_mode = os.getenv('AUTH_MODE', 'auto').lower()
+    auth_mode = os.getenv('AUTH_MODE', '').lower()
     
+    # If AUTH_MODE is set, use it directly
     if auth_mode == 'device':
         print("🔐 Using Device Code authentication")
         print("📱 You'll be prompted to visit a URL and enter a code")
@@ -40,14 +41,54 @@ def get_azure_credential():
         print("🖥️  A browser window will open for authentication")
         return InteractiveBrowserCredential()
     
+    elif auth_mode == 'cli':
+        print("🔄 Using Azure CLI authentication")
+        print("💡 Make sure you've run 'az login' first")
+        return DefaultAzureCredential()
+    
     elif all([TENANT_ID, CLIENT_ID, CLIENT_SECRET]):
         print("🔑 Using Service Principal authentication")
         return ClientSecretCredential(TENANT_ID, CLIENT_ID, CLIENT_SECRET) # type: ignore
     
+    # If no AUTH_MODE set, prompt user for choice
     else:
-        print("🔄 Using Default Azure Credential (trying Azure CLI first)")
-        print("💡 If this fails, set AUTH_MODE=device or AUTH_MODE=browser")
-        return DefaultAzureCredential()
+        print("\n� Choose Authentication Method:")
+        print("1. 🌐 Interactive Browser Login (opens browser window)")
+        print("2. 📱 Device Code Login (enter code on another device)")
+        print("3. 🔄 Azure CLI (if you've already run 'az login')")
+        print("4. ⚡ Auto-detect (try Azure CLI first, then prompt)")
+        
+        while True:
+            try:
+                choice = input("\nEnter choice (1-4): ").strip()
+                
+                if choice == '1':
+                    print("🌐 Using Interactive Browser authentication")
+                    print("🖥️  A browser window will open for authentication")
+                    return InteractiveBrowserCredential()
+                
+                elif choice == '2':
+                    print("🔐 Using Device Code authentication")
+                    print("📱 You'll be prompted to visit a URL and enter a code")
+                    return DeviceCodeCredential()
+                
+                elif choice == '3':
+                    print("🔄 Using Azure CLI authentication")
+                    print("💡 Make sure you've run 'az login' first")
+                    return DefaultAzureCredential()
+                
+                elif choice == '4':
+                    print("⚡ Auto-detecting authentication method...")
+                    return DefaultAzureCredential()
+                
+                else:
+                    print("❌ Invalid choice. Please enter 1, 2, 3, or 4.")
+                    
+            except KeyboardInterrupt:
+                print("\n❌ Authentication cancelled by user")
+                sys.exit(1)
+            except Exception:
+                print("❌ Invalid input. Please enter 1, 2, 3, or 4.")
 
 def get_customer_info(credential):
     """Get customer information from Azure subscription and tenant details."""

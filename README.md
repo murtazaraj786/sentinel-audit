@@ -12,42 +12,46 @@ A comprehensive collection of automated security audit tools for Microsoft secur
 
 ## 🚀 Quick Start
 
-### Option 1: One-Command Setup (Recommended)
+### Option 1: Interactive Menu (Easiest!)
 
+**Windows:**
+```cmd
+# Double-click START_AUDITS.bat or run:
+START_AUDITS.bat
+```
+
+**All Platforms:**
+```bash
+python run_with_auth.py
+```
+
+### Option 2: Quick Authentication Options
+
+**Interactive Browser Login (GUI required):**
+```bash
+set AUTH_MODE=browser
+python "Sentinel Audit/sentinel_audit.py"
+```
+
+**Device Code Login (any device):**
+```bash  
+set AUTH_MODE=device
+python "Sentinel Audit/sentinel_audit.py"
+```
+
+**Azure CLI (if already logged in):**
+```bash
+set AUTH_MODE=cli
+python "Sentinel Audit/sentinel_audit.py"
+```
+
+### Option 3: One-Command Setup
 ```bash
 # Clone and set up everything
 git clone https://github.com/murtazaraj786/sentinel-auditandupdate.git
 cd sentinel-auditandupdate
 python setup_all.py
 ```
-
-### Option 2: Manual Setup
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/murtazaraj786/sentinel-auditandupdate.git
-   cd sentinel-auditandupdate
-   ```
-
-2. **Set up environment variables**
-   ```bash
-   # For Sentinel audits
-   export AZURE_SUBSCRIPTION_ID="your-subscription-id"
-   export RESOURCE_GROUP_NAME="your-resource-group"
-   export WORKSPACE_NAME="your-workspace-name"
-   
-   # For Defender XDR audit
-   export AZURE_TENANT_ID="your-tenant-id"
-   
-   # Authentication mode (device/browser/default)
-   export AUTH_MODE="device"
-   ```
-
-3. **Run individual audits**
-   ```bash
-   # Sentinel Basic Audit
-   cd "Sentinel Audit"
-   pip install -r simple_requirements.txt
    python sentinel_audit.py
    
    # SOC Optimization
@@ -60,6 +64,45 @@ python setup_all.py
    pip install -r xdr_requirements.txt
    python defender_xdr_audit.py
    ```
+
+## 🔐 Authentication Options
+
+All audit scripts support multiple authentication methods. Choose the one that works best for your environment:
+
+### 🌐 Interactive Browser Login
+- **Best for**: Desktop environments with GUI
+- **How it works**: Opens a web browser for Azure authentication
+- **Usage**: `set AUTH_MODE=browser` or choose option 1 in interactive menus
+
+### 📱 Device Code Login  
+- **Best for**: Remote/headless environments, shared computers
+- **How it works**: Provides a code to enter on https://microsoft.com/devicelogin
+- **Usage**: `set AUTH_MODE=device` or choose option 2 in interactive menus
+
+### 🔄 Azure CLI Authentication
+- **Best for**: Developers who use Azure CLI regularly
+- **How it works**: Uses existing `az login` session
+- **Usage**: `set AUTH_MODE=cli` or run `az login` first
+
+### 🔑 Service Principal (Automated)
+- **Best for**: Automated environments, CI/CD pipelines
+- **How it works**: Uses environment variables for credentials
+- **Setup**: Set `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`
+
+### ⚡ Auto-Detection
+- **Best for**: Mixed environments
+- **How it works**: Tries Azure CLI first, then prompts for other methods
+- **Usage**: Don't set `AUTH_MODE` or choose option 4 in menus
+
+## 🚀 Easy Launch Options
+
+**Windows Users:**
+- Double-click `START_AUDITS.bat` for a menu of all options
+- Use individual `.bat` files for specific combinations
+
+**All Platforms:**
+- Run `python run_with_auth.py` for an interactive helper
+- Each script will prompt for authentication if no mode is set
 
 ### Option 3: GitHub Actions (Fully Automated)
 

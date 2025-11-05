@@ -81,8 +81,10 @@ def detect_customer_name_from_metadata():
     search_paths = [
         "../Sentinel Audit/sentinel_customer_info_*.csv",
         "../Sentinel SOC Optimisation Audit/soc_customer_info_*.csv",
+        "../Defender XDR Audit/defender_xdr_*.csv",
         "./sentinel_customer_info_*.csv",
-        "./soc_customer_info_*.csv"
+        "./soc_customer_info_*.csv",
+        "./defender_xdr_*.csv"
     ]
     
     for pattern in search_paths:
@@ -93,23 +95,71 @@ def detect_customer_name_from_metadata():
             try:
                 metadata_df = pd.read_csv(latest_file)
                 if not metadata_df.empty and 'customer_name' in metadata_df.columns:
-                    customer_name = metadata_df.iloc[0]['customer_name']
-                    print(f"🔍 Auto-detected customer name from {latest_file}: {customer_name}")
-                    return customer_name
+                    customer_name = str(metadata_df.iloc[0]['customer_name']).strip()
+                    if customer_name:
+                        print(f"🔍 Auto-detected customer name from {latest_file}: {customer_name}")
+                        return customer_name
             except Exception as e:
                 print(f"⚠️  Could not read metadata from {latest_file}: {e}")
     
     return None
 
+def auto_detect_xdr_files():
+    """Auto-detect Defender XDR CSV files in current and parent directories."""
+    import glob
+    
+    detected_files = {}
+    
+    search_patterns = {
+        "xdr_security_alerts": [
+            "../Defender XDR Audit/defender_xdr_security_alerts_*.csv",
+            "./defender_xdr_security_alerts_*.csv"
+        ],
+        "xdr_security_incidents": [
+            "../Defender XDR Audit/defender_xdr_security_incidents_*.csv", 
+            "./defender_xdr_security_incidents_*.csv"
+        ],
+        "xdr_attack_simulations": [
+            "../Defender XDR Audit/defender_xdr_attack_simulations_*.csv",
+            "./defender_xdr_attack_simulations_*.csv"
+        ],
+        "xdr_secure_score": [
+            "../Defender XDR Audit/defender_xdr_secure_score_*.csv",
+            "./defender_xdr_secure_score_*.csv"
+        ]
+    }
+    
+    for file_type, patterns in search_patterns.items():
+        for pattern in patterns:
+            files = glob.glob(pattern)
+            if files:
+                # Use the most recent file
+                latest_file = max(files, key=os.path.getmtime)
+                detected_files[file_type] = latest_file
+                print(f"🔍 Auto-detected {file_type}: {latest_file}")
+                break
+    
+    return detected_files
+
 def main():
-    parser = argparse.ArgumentParser(description="Generate a Microsoft Sentinel HLD-style audit report from CSV exports.")
+    parser = argparse.ArgumentParser(description="Generate a comprehensive Microsoft Sentinel and Defender XDR HLD-style audit report from CSV exports.")
+    
+    # Sentinel required arguments
     parser.add_argument("--analytic-rules", required=True, help="Path to sentinel analytic rules CSV")
     parser.add_argument("--data-connectors", required=True, help="Path to sentinel data connectors CSV")
     parser.add_argument("--soc-ingestion", required=True, help="Path to SOC data ingestion CSV")
     parser.add_argument("--soc-recommendations", required=True, help="Path to SOC recommendations CSV")
     parser.add_argument("--soc-rule-efficiency", required=True, help="Path to SOC rule efficiency CSV")
+    
+    # Defender XDR optional arguments
+    parser.add_argument("--xdr-security-alerts", help="Path to Defender XDR security alerts CSV")
+    parser.add_argument("--xdr-security-incidents", help="Path to Defender XDR security incidents CSV")
+    parser.add_argument("--xdr-attack-simulations", help="Path to Defender XDR attack simulations CSV")
+    parser.add_argument("--xdr-secure-score", help="Path to Defender XDR secure score CSV")
+    
+    # General arguments
     parser.add_argument("--customer-name", help="Customer name to place in the report header (auto-detected if not specified)")
-    parser.add_argument("--output", default="sentinel_hld_audit.docx", help="Output .docx path")
+    parser.add_argument("--output", default="sentinel_xdr_hld_audit.docx", help="Output .docx path")
     parser.add_argument("--preview-rows", type=int, default=10, help="Rows to preview in each table")
     args = parser.parse_args()
     
@@ -117,8 +167,19 @@ def main():
     if not args.customer_name:
         detected_name = detect_customer_name_from_metadata()
         args.customer_name = detected_name if detected_name else "Azure Customer"
+    
+    # Auto-detect XDR files if not explicitly provided
+    auto_detected_xdr = auto_detect_xdr_files()
+    if not args.xdr_security_alerts and "xdr_security_alerts" in auto_detected_xdr:
+        args.xdr_security_alerts = auto_detected_xdr["xdr_security_alerts"]
+    if not args.xdr_security_incidents and "xdr_security_incidents" in auto_detected_xdr:
+        args.xdr_security_incidents = auto_detected_xdr["xdr_security_incidents"]
+    if not args.xdr_attack_simulations and "xdr_attack_simulations" in auto_detected_xdr:
+        args.xdr_attack_simulations = auto_detected_xdr["xdr_attack_simulations"]
+    if not args.xdr_secure_score and "xdr_secure_score" in auto_detected_xdr:
+        args.xdr_secure_score = auto_detected_xdr["xdr_secure_score"]
 
-    # Load CSVs
+    # Load Sentinel CSVs
     dfs = {
         "Analytic Rules": pd.read_csv(args.analytic_rules),
         "Data Connectors": pd.read_csv(args.data_connectors),
@@ -126,6 +187,35 @@ def main():
         "SOC Recommendations": pd.read_csv(args.soc_recommendations),
         "SOC Rule Efficiency": pd.read_csv(args.soc_rule_efficiency),
     }
+    
+    # Load optional Defender XDR CSVs
+    xdr_dfs = {}
+    if args.xdr_security_alerts:
+        try:
+            xdr_dfs["XDR Security Alerts"] = pd.read_csv(args.xdr_security_alerts)
+        except Exception as e:
+            print(f"⚠️  Could not load XDR Security Alerts: {e}")
+    
+    if args.xdr_security_incidents:
+        try:
+            xdr_dfs["XDR Security Incidents"] = pd.read_csv(args.xdr_security_incidents)
+        except Exception as e:
+            print(f"⚠️  Could not load XDR Security Incidents: {e}")
+    
+    if args.xdr_attack_simulations:
+        try:
+            xdr_dfs["XDR Attack Simulations"] = pd.read_csv(args.xdr_attack_simulations)
+        except Exception as e:
+            print(f"⚠️  Could not load XDR Attack Simulations: {e}")
+    
+    if args.xdr_secure_score:
+        try:
+            xdr_dfs["XDR Secure Score"] = pd.read_csv(args.xdr_secure_score)
+        except Exception as e:
+            print(f"⚠️  Could not load XDR Secure Score: {e}")
+    
+    # Check if we have any XDR data
+    include_xdr = len(xdr_dfs) > 0
 
     # Create document
     doc = Document()
@@ -134,13 +224,19 @@ def main():
     style.font.size = Pt(11) # type: ignore
 
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    doc.add_heading(f"{args.customer_name} – Microsoft Sentinel High-Level Design (HLD) Audit Report", level=1)
+    title_suffix = " and Defender XDR" if include_xdr else ""
+    doc.add_heading(f"{args.customer_name} – Microsoft Sentinel{title_suffix} High-Level Design (HLD) Audit Report", level=1)
     doc.add_paragraph(f"Generated: {now}")
-    doc.add_paragraph(
+    
+    description = (
         "This HLD report assesses the Microsoft Sentinel deployment, focusing on data connector health, "
-        "analytic rule coverage, SOC recommendations, and operational efficiency. It includes risk ratings and "
-        "prioritised remediation actions based on supplied exports."
+        "analytic rule coverage, SOC recommendations, and operational efficiency."
     )
+    if include_xdr:
+        description += " It also includes Microsoft Defender XDR security posture, including alerts, incidents, attack simulations, and secure score metrics."
+    description += " The report includes risk ratings and prioritised remediation actions based on supplied exports."
+    
+    doc.add_paragraph(description)
 
     # Executive summary
     doc.add_heading("1. Executive Summary", level=2)
@@ -151,14 +247,33 @@ def main():
     di = dfs["SOC Data Ingestion"]
 
     enabled_count = infer_enabled_count(ar)
-    doc.add_paragraph(
-        f"Sentinel is operational with {len(dc)} data connectors and {len(ar)} analytic rules"
+    summary_text = (
+        f"Microsoft Sentinel is operational with {len(dc)} data connectors and {len(ar)} analytic rules"
         + (f", {enabled_count} enabled." if enabled_count is not None else ".")
     )
-    doc.add_paragraph(
+    
+    if include_xdr:
+        xdr_summary_parts = []
+        if "XDR Security Alerts" in xdr_dfs:
+            xdr_summary_parts.append(f"{len(xdr_dfs['XDR Security Alerts'])} security alerts")
+        if "XDR Security Incidents" in xdr_dfs:
+            xdr_summary_parts.append(f"{len(xdr_dfs['XDR Security Incidents'])} security incidents")
+        if "XDR Attack Simulations" in xdr_dfs:
+            xdr_summary_parts.append(f"{len(xdr_dfs['XDR Attack Simulations'])} attack simulations")
+        
+        if xdr_summary_parts:
+            summary_text += f" Defender XDR shows {', '.join(xdr_summary_parts)}."
+    
+    doc.add_paragraph(summary_text)
+    
+    risk_assessment = (
         "Overall risk: Medium — improvements recommended in connector completeness, rule enablement consistency, "
         "and ingestion coverage."
     )
+    if include_xdr:
+        risk_assessment += " XDR integration provides enhanced threat detection and response capabilities."
+    
+    doc.add_paragraph(risk_assessment)
 
     # Data Connectors
     doc.add_heading("2. Data Connectors", level=2)
@@ -184,6 +299,58 @@ def main():
     doc.add_heading("6. SOC Data Ingestion", level=2)
     doc.add_paragraph("Risk: Medium – Review gaps in ingestion and ensure critical tables are present and up to date.")
     add_section(doc, "6.1 Ingestion Overview", di, notes=None)
+
+    # Defender XDR Sections (if data is available)
+    if include_xdr:
+        section_num = 7
+        
+        if "XDR Security Alerts" in xdr_dfs:
+            doc.add_heading(f"{section_num}. Defender XDR Security Alerts", level=2)
+            alerts_df = xdr_dfs["XDR Security Alerts"]
+            
+            # Calculate severity breakdown if severity column exists
+            severity_note = None
+            if 'Severity' in alerts_df.columns:
+                severity_counts = alerts_df['Severity'].value_counts()
+                severity_note = f"Severity breakdown: {', '.join([f'{k}: {v}' for k, v in severity_counts.items()])}"
+            
+            doc.add_paragraph("Risk: Medium – Review and triage active security alerts, prioritizing high/critical severity items.")
+            add_section(doc, f"{section_num}.1 Active Security Alerts", alerts_df, notes=severity_note)
+            section_num += 1
+        
+        if "XDR Security Incidents" in xdr_dfs:
+            doc.add_heading(f"{section_num}. Defender XDR Security Incidents", level=2)
+            incidents_df = xdr_dfs["XDR Security Incidents"]
+            
+            # Calculate status breakdown if status column exists
+            status_note = None
+            if 'Status' in incidents_df.columns:
+                status_counts = incidents_df['Status'].value_counts()
+                status_note = f"Status breakdown: {', '.join([f'{k}: {v}' for k, v in status_counts.items()])}"
+            
+            doc.add_paragraph("Risk: Medium – Ensure incidents are properly investigated and resolved in timely manner.")
+            add_section(doc, f"{section_num}.1 Security Incidents Overview", incidents_df, notes=status_note)
+            section_num += 1
+        
+        if "XDR Attack Simulations" in xdr_dfs:
+            doc.add_heading(f"{section_num}. Defender XDR Attack Simulations", level=2)
+            simulations_df = xdr_dfs["XDR Attack Simulations"]
+            doc.add_paragraph("Risk: Low – Continue phishing simulations to maintain user awareness and identify training gaps.")
+            add_section(doc, f"{section_num}.1 Attack Simulation Campaigns", simulations_df, notes=None)
+            section_num += 1
+        
+        if "XDR Secure Score" in xdr_dfs:
+            doc.add_heading(f"{section_num}. Defender XDR Secure Score", level=2)
+            score_df = xdr_dfs["XDR Secure Score"]
+            
+            # Extract current score if available
+            score_note = None
+            if 'Percentage' in score_df.columns and not score_df.empty:
+                current_score = score_df.iloc[0]['Percentage']
+                score_note = f"Current security score: {current_score}"
+            
+            doc.add_paragraph("Risk: Low-Medium – Continue improving security posture based on secure score recommendations.")
+            add_section(doc, f"{section_num}.1 Security Posture Score", score_df, notes=score_note)
 
     # Save
     out_path = args.output
