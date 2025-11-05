@@ -42,7 +42,11 @@ def get_azure_credential():
     
     elif all([TENANT_ID, CLIENT_ID, CLIENT_SECRET]):
         print("🔑 Using Service Principal authentication")
-        return ClientSecretCredential(TENANT_ID, CLIENT_ID, CLIENT_SECRET)
+        return ClientSecretCredential(
+            tenant_id=TENANT_ID,  # type: ignore
+            client_id=CLIENT_ID,  # type: ignore
+            client_secret=CLIENT_SECRET  # type: ignore
+        )
     
     else:
         print("🔄 Using Default Azure Credential (trying Azure CLI first)")
@@ -81,7 +85,10 @@ def get_customer_info(credential):
             subscription_client = SubscriptionClient(credential)
             subscription = subscription_client.subscriptions.get(SUBSCRIPTION_ID)
             subscription_name = subscription.display_name or "Unknown Subscription"
-            tenant_id = subscription.tenant_id
+            # Get tenant ID from environment variable or credential
+            tenant_id = TENANT_ID
+            if not tenant_id and hasattr(credential, '_tenant_id'):
+                tenant_id = credential._tenant_id
         else:
             subscription_name = "Microsoft 365 Tenant"
             tenant_id = TENANT_ID or "Unknown"
